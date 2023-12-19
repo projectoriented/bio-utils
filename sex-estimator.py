@@ -40,6 +40,8 @@ def get_parser():
                         help="The Y ratio estimated from a truely female individual")
     parser.add_argument("--femaleY", type=int, default=TRUE_FEMALEY_RATIO,
                         help="The Y ratio estimated from a truely male individual")
+    parser.add_argument("--rl", type=int, default=10000,
+                        help="The required minimum read length. This is technology-specific.")
 
     return parser
 
@@ -52,12 +54,13 @@ def main():
     threads = args.threads
     maleY = args.maleY
     femaleY = args.femaleY
+    min_rl = args.rl
 
     autosomes_set = ['chr{}'.format(x) for x in list(range(1, 23))]
     genome_dict = {entry: "autosome" for entry in autosomes_set}
     genome_dict.update({"chrY": "chrY"})
 
-    df = gather_dataframes(filepath=filepath, num_processes=threads, target_chroms=["chrY"] + autosomes_set)
+    df = gather_dataframes(filepath=filepath, num_processes=threads, target_chroms=["chrY"] + autosomes_set, rl=min_rl)
     df["sample"] = filepath
 
     df["genome_type"] = df.apply(lambda row: genome_dict.get(row["#rname"], ""), axis=1)
@@ -80,18 +83,19 @@ def main():
 
 
 def guesstimate_sex(x):
-    if x >= 0.8:
+    target = (TRUE_MALEY_RATIO / 1.3)
+    if x >= target:
         return "male"
-    elif 0.8 > x > 0.5:
+    elif target > x > (TRUE_MALEY_RATIO / 1.5):
         return "maybe-male"
     else:
         return "female"
 
 
-def gather_dataframes(filepath, num_processes, target_chroms):
+def gather_dataframes(filepath, num_processes, target_chroms, rl):
     arglist = []
     for entry in target_chroms:
-        arglist.append(make_adl_args(region=entry, min_read_len=10000))
+        arglist.append(make_adl_args(region=entry, min_read_len=rl))
 
     filepath_list = [filepath] * len(arglist)
 
