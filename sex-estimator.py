@@ -68,7 +68,7 @@ def main():
     stats = df.groupby(["genome_type"], group_keys=False)["numreads"].sum().reset_index().set_index("genome_type").T
     stats["ratioY"] = stats["chrY"] / stats["autosome"]
     stats["Yestimate"] = (stats["ratioY"] - femaleY) / (maleY - femaleY)
-    stats["assigned_sex"] = stats["Yestimate"].apply(guesstimate_sex)
+    stats["assigned_sex"] = stats["Yestimate"].apply(lambda x: guesstimate_sex(x=x, male_ratio=maleY))
     stats["sample"] = filepath
 
     stats.reset_index(drop=True, inplace=True)
@@ -82,11 +82,11 @@ def main():
     df.to_csv(f"{prefix}-stats.tsv", header=True, index=False, sep="\t")
 
 
-def guesstimate_sex(x):
-    target = (TRUE_MALEY_RATIO / 1.3)
+def guesstimate_sex(x, male_ratio):
+    target = (male_ratio / 1.3)
     if x >= target:
         return "male"
-    elif target > x > (TRUE_MALEY_RATIO / 1.5):
+    elif target > x > (male_ratio / 1.5):
         return "maybe-male"
     else:
         return "female"
