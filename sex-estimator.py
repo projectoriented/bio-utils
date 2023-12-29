@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Usage: ./sex-estimator.py your.bam --threads 8
+Usage: ./sex-estimator.py
 Check the sex of sample.
 Author: Mei Wu, https://github.com/projectoriented
 """
@@ -34,14 +34,13 @@ def get_parser():
         description=__doc__
     )
 
-    parser.add_argument("filepath", nargs=1, type=str)
+    parser.add_argument("filepath", nargs=1, type=str, help="BAM file")
+    parser.add_argument("--prefix", type=str, help="Prefix name will be used for output files")
     parser.add_argument("-t", "--threads", type=int, default=4)
     parser.add_argument("--maleY", type=int, default=TRUE_MALEY_RATIO,
                         help="The Y ratio estimated from a truely female individual")
     parser.add_argument("--femaleY", type=int, default=TRUE_FEMALEY_RATIO,
                         help="The Y ratio estimated from a truely male individual")
-    parser.add_argument("--rl", type=int, default=10000,
-                        help="The required minimum read length. This is technology-specific.")
 
     return parser
 
@@ -51,51 +50,51 @@ def main():
     args = parser.parse_args()
 
     filepath = args.filepath[0]
+    prefix = args.prefix
     threads = args.threads
     maleY = args.maleY
     femaleY = args.femaleY
-    min_rl = args.rl
 
     autosomes_set = ['chr{}'.format(x) for x in list(range(1, 23))]
     genome_dict = {entry: "autosome" for entry in autosomes_set}
     genome_dict.update({"chrY": "chrY"})
 
-    df = gather_dataframes(filepath=filepath, num_processes=threads, target_chroms=["chrY"] + autosomes_set, rl=min_rl)
+    LOG.info(f"Getting coverages in {filepath}")
+    df = gather_dataframes(filepath=filepath, num_processes=threads, target_chroms=["chrY"] + autosomes_set)
     df["sample"] = filepath
 
     df["genome_type"] = df.apply(lambda row: genome_dict.get(row["#rname"], ""), axis=1)
 
+    LOG.info(f"Estimating sex in {filepath}")
     stats = df.groupby(["genome_type"], group_keys=False)["numreads"].sum().reset_index().set_index("genome_type").T
     stats["ratioY"] = stats["chrY"] / stats["autosome"]
     stats["Yestimate"] = (stats["ratioY"] - femaleY) / (maleY - femaleY)
-    stats["assigned_sex"] = stats["Yestimate"].apply(lambda x: guesstimate_sex(x=x, male_ratio=maleY))
+    stats["assigned_sex"] = stats["Yestimate"].apply(guesstimate_sex)
     stats["sample"] = filepath
 
     stats.reset_index(drop=True, inplace=True)
     df.columns.name = ""
 
-    file_basename = os.path.basename(filepath)
-
+    LOG.info(f"Done, bye")
     os.makedirs(datef, exist_ok=True)
-    prefix = os.path.join(datef, file_basename)
+    prefix = os.path.join(datef, prefix)
     stats.to_csv(f"{prefix}-Ystats.tsv", header=True, index=False, sep="\t")
     df.to_csv(f"{prefix}-stats.tsv", header=True, index=False, sep="\t")
 
 
-def guesstimate_sex(x, male_ratio):
-    target = (male_ratio / 1.3)
-    if x >= target:
+def guesstimate_sex(x):
+    if x >= 0.6:
         return "male"
-    elif target > x > (male_ratio / 1.5):
+    elif 0.6 > x > 0.5:
         return "maybe-male"
     else:
         return "female"
 
 
-def gather_dataframes(filepath, num_processes, target_chroms, rl):
+def gather_dataframes(filepath, num_processes, target_chroms):
     arglist = []
     for entry in target_chroms:
-        arglist.append(make_adl_args(region=entry, min_read_len=rl))
+        arglist.append(make_adl_args(region=entry, min_read_len=10000))
 
     filepath_list = [filepath] * len(arglist)
 
