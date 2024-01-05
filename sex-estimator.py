@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Usage: ./sex-estimator.py
+Usage: ./sex-estimator.py alignment.bam --threads 10 --prefix 11611_fa-GRCh38-HiFi-aln
 Check the sex of sample.
 Author: Mei Wu, https://github.com/projectoriented
 """
-import os
 import sys
 import logging
 import argparse
@@ -12,7 +11,6 @@ import argparse
 import pandas as pd
 import pysam
 
-from datetime import datetime
 
 from io import StringIO
 import multiprocessing as mp
@@ -24,8 +22,6 @@ logging.basicConfig(stream=sys.stderr, level="INFO", format='%(asctime)s - %(lev
 TRUE_MALEY_RATIO = 0.009847771
 TRUE_FEMALEY_RATIO = 0.002462753
 
-datef = datetime.today().strftime('%Y%m%d')
-
 
 def get_parser():
     """Get options"""
@@ -35,7 +31,7 @@ def get_parser():
     )
 
     parser.add_argument("filepath", nargs=1, type=str, help="BAM file")
-    parser.add_argument("--prefix", type=str, help="Prefix name will be used for output files")
+    parser.add_argument("--prefix", type=str, help="Prefix name will be used for output files", required=True)
     parser.add_argument("-t", "--threads", type=int, default=4)
     parser.add_argument("--maleY", type=int, default=TRUE_MALEY_RATIO,
                         help="The Y ratio estimated from a truely female individual")
@@ -76,8 +72,6 @@ def main():
     df.columns.name = ""
 
     LOG.info(f"Done, bye")
-    os.makedirs(datef, exist_ok=True)
-    prefix = os.path.join(datef, prefix)
     stats.to_csv(f"{prefix}-Ystats.tsv", header=True, index=False, sep="\t")
     df.to_csv(f"{prefix}-stats.tsv", header=True, index=False, sep="\t")
 
